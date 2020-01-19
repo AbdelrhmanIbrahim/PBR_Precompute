@@ -1,11 +1,1 @@
-﻿  main.cpp
-d:\rendering_jo\pbr_precompute\pbr_precompute\pbr_precompute\main.cpp(253): warning C4305: 'argument': truncation from 'double' to 'float'
-d:\rendering_jo\pbr_precompute\pbr_precompute\pbr_precompute\main.cpp(275): warning C4244: 'argument': conversion from 'float' to 'GLsizei', possible loss of data
-d:\rendering_jo\pbr_precompute\pbr_precompute\pbr_precompute\main.cpp(284): warning C4244: 'argument': conversion from 'float' to 'GLsizei', possible loss of data
-d:\rendering_jo\pbr_precompute\pbr_precompute\pbr_precompute\main.cpp(291): warning C4244: 'initializing': conversion from 'float' to 'size_t', possible loss of data
-d:\rendering_jo\pbr_precompute\pbr_precompute\pbr_precompute\main.cpp(292): warning C4244: '=': conversion from 'float' to 'int', possible loss of data
-d:\rendering_jo\pbr_precompute\pbr_precompute\pbr_precompute\main.cpp(293): warning C4244: '=': conversion from 'float' to 'int', possible loss of data
-d:\rendering_jo\pbr_precompute\pbr_precompute\pbr_precompute\main.cpp(299): warning C4311: 'type cast': pointer truncation from 'glgpu::cubemap' to 'GLuint'
-d:\rendering_jo\pbr_precompute\pbr_precompute\pbr_precompute\main.cpp(299): warning C4302: 'type cast': truncation from 'glgpu::cubemap' to 'GLuint'
-d:\rendering_jo\pbr_precompute\pbr_precompute\pbr_precompute\main.cpp(307): warning C4244: 'argument': conversion from 'float' to 'GLsizei', possible loss of data
-  PBR_Precompute.vcxproj -> D:\rendering_jo\PBR_Precompute\PBR_Precompute\x64\Debug\PBR_Precompute.exe
+﻿
