@@ -20,11 +20,24 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="glew.c" />
+    <ClCompile Include="glgpu.cpp" />
+    <ClCompile Include="image.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Gfx.h" />
     <ClInclude Include="glew.h" />
+    <ClInclude Include="glgpu.h" />
+    <ClInclude Include="image.h" />
+    <ClInclude Include="Matrix.h" />
+    <ClInclude Include="Stb_Image.h" />
+    <ClInclude Include="Stb_Image_Write.h" />
+    <ClInclude Include="Vector.h" />
     <ClInclude Include="wglew.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="cube.vertex" />
+    <None Include="equarectangular_to_cubemap.pixel" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>

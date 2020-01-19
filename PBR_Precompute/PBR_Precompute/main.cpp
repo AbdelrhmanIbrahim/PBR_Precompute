@@ -6,6 +6,24 @@
 
 #include <assert.h>
 
+#include "Gfx.h"
+#include "glgpu.h"
+#include "image.h"
+
+#include <vector>
+
+using namespace math;
+using namespace glgpu;
+using namespace io;
+using namespace geo;
+
+struct win_gl
+{
+	HWND handle;
+	HDC dc;
+	HGLRC context;
+};
+
 LRESULT CALLBACK
 _fake_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
@@ -22,53 +40,6 @@ _fake_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
 	return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
-
-bool
-error()
-{
-	GLenum err = glGetError();
-	switch (err)
-	{
-	case GL_INVALID_ENUM:
-		assert(false && "invalid enum value was passed");
-		return false;
-
-	case GL_INVALID_VALUE:
-		assert(false && "invalid value was passed");
-		return false;
-
-	case GL_INVALID_OPERATION:
-		assert(false && "invalid operation at the current state of opengl");
-		return false;
-
-	case GL_INVALID_FRAMEBUFFER_OPERATION:
-		assert(false && "invalid framebuffer operation");
-		return false;
-
-	case GL_OUT_OF_MEMORY:
-		assert(false && "out of memory");
-		return false;
-
-	case GL_STACK_UNDERFLOW:
-		assert(false && "stack underflow");
-		return false;
-
-	case GL_STACK_OVERFLOW:
-		assert(false && "stack overflow");
-		return false;
-
-	case GL_NO_ERROR:
-	default:
-		return true;
-	}
-}
-
-struct win_gl
-{
-	HWND handle;
-	HDC dc;
-	HGLRC context;
-};
 
 win_gl
 offline_win_create(int gl_major, int gl_minor)
@@ -218,46 +189,173 @@ offline_win_create(int gl_major, int gl_minor)
 	return win;
 }
 
+constexpr static Vertex unit_cube[36] =
+{
+	//back
+	Vertex{-1.0f, -1.0f, -1.0f},
+	Vertex{1.0f, 1.0f, -1.0f},
+	Vertex{1.0f, -1.0f, -1.0f},
+	Vertex{1.0f, 1.0f, -1.0f},
+	Vertex{-1.0f, -1.0f, -1.0f},
+	Vertex{-1.0f, 1.0f, -1.0},
+
+	//front
+	Vertex{-1.0f, -1.0f, 1.0},
+	Vertex{1.0f, -1.0f, 1.0f},
+	Vertex{1.0f, 1.0f, 1.0f,},
+	Vertex{1.0f, 1.0f, 1.0f,},
+	Vertex{-1.0f, 1.0f, 1.0f},
+	Vertex{-1.0f, -1.0f, 1.0},
+
+	//left
+	Vertex{-1.0f, 1.0f, 1.0f},
+	Vertex{-1.0f, 1.0f, -1.0f},
+	Vertex{-1.0f, -1.0f, -1.0f},
+	Vertex{-1.0f, -1.0f, -1.0f},
+	Vertex{-1.0f, -1.0f, 1.0},
+	Vertex{-1.0f, 1.0f, 1.0f},
+
+	//right
+	Vertex{1.0f, 1.0f, 1.0f,},
+	Vertex{1.0f, -1.0f, -1.0},
+	Vertex{1.0f, 1.0f, -1.0f},
+	Vertex{1.0f, -1.0f, -1.0f},
+	Vertex{1.0f, 1.0f, 1.0f,},
+	Vertex{1.0f, -1.0f, 1.0f},
+
+	//bottom
+	Vertex{-1.0f, -1.0f, -1.0f},
+	Vertex{1.0f, -1.0f, -1.0f},
+	Vertex{1.0f, -1.0f, 1.0f},
+	Vertex{1.0f, -1.0f, 1.0f},
+	Vertex{-1.0f, -1.0f, 1.0f},
+	Vertex{-1.0f, -1.0f, -1.0f},
+
+	//top
+	Vertex{-1.0f, 1.0f, -1.0f},
+	Vertex{1.0f, 1.0f, 1.0f,},
+	Vertex{1.0f, 1.0f, -1.0f},
+	Vertex{1.0f, 1.0f, 1.0f,},
+	Vertex{-1.0f, 1.0f, -1.0f},
+	Vertex{-1.0f, 1.0f, 1.0f}
+};
+
+std::vector<Image>
+hdr_to_cubemap(const io::Image& img, vec2f view_size, bool mipmap)
+{
+	//create hdr texture
+	texture hdr = texture2d_create(img, IMAGE_FORMAT::HDR);
+
+	//convert HDR equirectangular environment map to cubemap
+	//create 6 views that will be rendered to the cubemap using equarectangular shader
+	//don't use ortho projection as this will make z in NDC the same so your captures will look like duplicated
+	//1.00000004321 is tan(45 degrees)
+	Mat4f proj = proj_prespective_matrix(100, 0.1, 1, -1, 1, -1, 1.00000004321);
+	Mat4f views[6] =
+	{
+		view_lookat_matrix(vec3f{-0.001f,  0.0f,  0.0f}, vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f}),
+		view_lookat_matrix(vec3f{0.001f,  0.0f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f}),
+		view_lookat_matrix(vec3f{0.0f, -0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  1.0f}),
+		view_lookat_matrix(vec3f{0.0f,  0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  -1.0f}),
+		view_lookat_matrix(vec3f{0.0f,  0.0f, -0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f}),
+		view_lookat_matrix(vec3f{0.0f,  0.0f,  0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f})
+	};
+
+	//create env cubemap
+	//(HDR should a 32 bit for each channel to cover a wide range of colors,
+	//they make the exponent the alpha and each channel remains 8 so 16 bit for each -RGB-)
+	cubemap cube_map = cubemap_create(view_size, INTERNAL_TEXTURE_FORMAT::RGB16F, EXTERNAL_TEXTURE_FORMAT::RGB, DATA_TYPE::FLOAT, mipmap);
+
+	//float framebuffer to render to
+	GLuint fbo, rbo;
+	glGenFramebuffers(1, &fbo);
+	glGenRenderbuffers(1, &rbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, view_size[0], view_size[1]);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+	//setup
+	program prog = program_create("shaders/cube.vertex", "shaders/equarectangular_to_cubemap.pixel");
+	program_use(prog);
+	texture2d_bind(hdr, TEXTURE_UNIT::UNIT_0);
+
+	//render offline to the output cubemap texs
+	glViewport(0, 0, view_size[0], view_size[1]);
+	vao cube_vao = vao_create();
+	buffer cube_vs = vertex_buffer_create(unit_cube, 36);
+
+	std::vector<io::Image> imgs(6);
+	for (int i = 0; i < 6; ++i)
+	{
+		imgs[i].data = new unsigned char[4 * view_size[0] * view_size[1]];
+		imgs[i].width = view_size[0];
+		imgs[i].height = view_size[1];
+		imgs[i].channels = 4;
+	}
+
+	for (unsigned int i = 0; i < 6; ++i)
+	{
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, (GLuint)cube_map, 0);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		uniformmat4f_set(prog, "vp", proj * views[i]);
+		vao_bind(cube_vao, cube_vs, NULL);
+		draw_strip(36);
+		vao_unbind();
+
+		//TEST
+		glReadPixels(0, 0, view_size[0], view_size[1], GL_RGBA, GL_UNSIGNED_BYTE, imgs[i].data);
+	}
+
+	texture2d_unbind();
+	glBindFramebuffer(GL_FRAMEBUFFER, NULL);
+
+	//free
+	glDeleteRenderbuffers(1, &rbo);
+	glDeleteFramebuffers(1, &fbo);
+	vao_delete(cube_vao);
+	buffer_delete(cube_vs);
+	program_delete(prog);
+	texture_free(hdr);
+
+	return imgs;
+}
+
+void
+hdr_faces_extract(vec2f view_size)
+{
+	frame_start();
+	color_clear(1, 0, 0);
+
+	//draw
+	Image img = image_read("LA_spec.hdr", io::IMAGE_FORMAT::HDR);
+	std::vector<Image> imgs = hdr_to_cubemap(img, view_size, false);
+	image_free(img);
+
+	io::image_write(imgs[0], std::string("right.png").c_str(), io::IMAGE_FORMAT::PNG);
+	io::image_write(imgs[1], std::string("left.png").c_str(), io::IMAGE_FORMAT::PNG);
+	io::image_write(imgs[2], std::string("top.png").c_str(), io::IMAGE_FORMAT::PNG);
+	io::image_write(imgs[3], std::string("bottom.png").c_str(), io::IMAGE_FORMAT::PNG);
+	io::image_write(imgs[4], std::string("back.png").c_str(), io::IMAGE_FORMAT::PNG);
+	io::image_write(imgs[5], std::string("front.png").c_str(), io::IMAGE_FORMAT::PNG);
+
+	for (int i = 0; i < 6; ++i)
+		image_free(imgs[i]);
+}
+
 int
 main(int argc, char** argv)
 {
 	//create offline window with attached 4.5 opengl context
 	win_gl win = offline_win_create(4, 5);
 
-	//All the following in the state of the current opengl context (win.context)
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
-	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
-
-	//fb
-	GLuint offline_fb, offline_tex;
-	glGenFramebuffers(1, &offline_fb);
-
-	//tex
-	int view_size[2]{ 512,512 };
-	glGenTextures(1, &offline_tex);
-	glBindTexture(GL_TEXTURE_2D, offline_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, view_size[0], view_size[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-	glBindTexture(GL_TEXTURE_2D, NULL);
-
-	//render offline to fb
-	glBindFramebuffer(GL_FRAMEBUFFER, offline_fb);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, offline_tex, 0);
+	//offline stuff
+	//extract faces from hdr
 	{
-		//for some reason the right read is after the second draw..double buffering? later
-		unsigned char* data = new unsigned char[4 * view_size[0] * view_size[1]];
-		for(int draws = 0; draws < 2; ++draws)
-		{
-			//draw
-			glClear(GL_COLOR_BUFFER_BIT);
-			glClearColor(1, 0, 0, 1);
-			glViewport(0, 0, view_size[0], view_size[1]);
-
-			//read
-			glReadPixels(0, 0, view_size[0], view_size[1], GL_RGBA, GL_UNSIGNED_BYTE, data);
-		};
-		delete data;
+		//for some reason the right read is after the second draw..double buffering? (TODO), so that's a dummy first draw
+		color_clear(0, 1, 0);
+		//extract
+		hdr_faces_extract(vec2f{ 512, 512 });
 	}
-	glBindFramebuffer(GL_FRAMEBUFFER, NULL);
 	return 0;
 }

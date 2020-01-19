@@ -1,0 +1,16 @@
+#version 400 core
+#extension GL_ARB_shading_language_420pack : require
+
+layout (location = 0) in vec3 pos;
+layout (location = 1) in vec3 normal;
+layout (location = 2) in vec2 uv;
+
+out vec3 world_pos;
+
+uniform mat4 vp;
+
+void main()
+{
+	world_pos = pos;
+	gl_Position =  vp * vec4(world_pos, 1.0);
+}
