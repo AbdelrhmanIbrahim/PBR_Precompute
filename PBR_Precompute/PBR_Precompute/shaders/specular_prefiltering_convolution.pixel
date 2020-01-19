@@ -1,0 +1,141 @@
+/*
+USAGE:
+	This shader is used to generate the convoluted prefiltered specular map which is the solution of the first part of the
+	specular integral equation in the reflectance equation. which is what we use in the PBR shader to sample a part from the specular part of the rendering eqn integral.
+
+HOW TO:
+	To convolute the env map to generate the prefiltered specular map, we need to know average of all the reflected rays of a surface, 
+	reflectd light rays are not simply reflected around the normal at this point with same angle but with a different direction,
+	this will be only in smooth non rough surfaces at all, mirrors for example. In real life, the reflected rays are contained
+	by some kind of lobe we call the specular lobe which is oriented around a direction we call halfway vector determind according 
+	surface microfaces structure which roughness contributes to determine. Reflected light rays are random but somehow uniformaly distributed within the lobe
+	according to the roughness and the micro structure of the surface. Rougher surfaces give Blurrer reflections and Smooth (metallic for example) surfaces 
+	give clear non distorted reflections.
+
+	So, to generate those semi-random reflected outcoming rays (samples number we determine) that are constrained through
+	a certain lobe we use various concepts from statistics and probablity :
+	1) Monte Carlo integration : used to give an approx average value for a given huge set without taking the whole set into consideration + weight for each sample.
+	2) Low-discrepancy Hammersley sequence : used to generate random - uniformly distrubtion of the samples.
+	3) Van Der Corpus sequence : used to mirror a decimal binary representation around its decimal point, to generate Low-discrepancy Hammersley sequence.
+
+	then we generate the sampling vectors (the reflected light rays used to sample the env map) using sampling called 
+	GGX importance sampling which is generating the samples biased and constrained around an orientation using both concepts above. (inside the specular lobe)
+*/
+
+#version 330 core
+in vec3 world_pos;
+out vec4 frag_color;
+
+uniform samplerCube env_map;
+uniform float roughness;
+
+const float PI = 3.14159265359;
+
+//Van Der Corpus sequence to mirror a decimal binary representation around its decimal point to get a value between 0 <-> 1
+//read this to understand : http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
+float
+VDC(uint bits) 
+{
+	bits = (bits << 16u) | (bits >> 16u);
+	bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+	bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+	bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+	bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+	return float(bits) * 2.3283064365386963e-10; //0x100000000
+}
+
+// Low-discrepancy sequence to generate low-discrepancy sample i of the total sample set of size N.
+vec2
+Hammersley(uint i, uint N)
+{
+	return vec2(float(i)/float(N), VDC(i));
+}
+
+vec3
+GGX_Importance_Sampling(vec2 Xi, vec3 N, float roughness)
+{
+	//somehow a cosinus weighted distribution mapping from 2d point set to a 3d points on hemisphere that will be used to generate the sample
+	//read http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html for more understanding
+	float a = roughness*roughness;
+	float phi = 2.0 * PI * Xi.x;
+	float cos_theta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
+	float sin_theta = sqrt(1.0 - cos_theta*cos_theta);
+
+	// from spherical coordinates to cartesian coordinates
+	vec3 H;
+	H.x = cos(phi) * sin_theta;
+	H.y = sin(phi) * sin_theta;
+	H.z = cos_theta;
+
+	// from tangent-space vector to world-space sample vector
+	vec3 up        = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+	vec3 tangent   = normalize(cross(up, N));
+	vec3 bitangent = normalize(cross(N, tangent));
+
+	vec3 sample = tangent * H.x + bitangent * H.y + N * H.z;
+	return normalize(sample);
+}
+float
+NDF_GGX(vec3 normal, vec3 halfway, float roughness)
+{
+	float r = roughness*roughness;
+	float r2 = r*r;
+	float dot = max(dot(normal, halfway), 0.0);
+	float dot2 = dot*dot;
+	float nom   = r2; 
+	float denom = (dot2 * (r2 - 1.0) + 1.0);
+	denom = PI * denom * denom;
+	return nom / max(denom, 0.001); //in case of zero denom
+}
+
+void
+main()
+{
+	//split sum algorithm assumes the view direction to be the normal to give a decent approx result and simplifying the calc
+	vec3 N = normalize(world_pos);
+	vec3 view = N;
+
+	const uint SAMPLE_COUNT = 1024u;
+	float weight = 0.0;
+	vec3 prefiltered_color = vec3(0.0);
+	for(uint i = 0u; i < SAMPLE_COUNT; ++i)
+	{
+		//for each sample we generate a random - uniformaly distrbuted vector used in importance sampling to get the sample vector 
+		//that should be biased, oriented around the halfway vector and constrained by the specular lobe according to the surface roughness
+		vec2 Xi = Hammersley(i, SAMPLE_COUNT);
+		vec3 halfway  = GGX_Importance_Sampling(Xi, N, roughness);
+
+		//is this somekind of orienting around the halfway?
+		//needs to debug impotance sampling vector on a testcase on CPU to figure this out correctly. (revisit)
+		vec3 L  = normalize(2.0 * dot(view, halfway) * halfway - view);
+
+		//sample vector oriented around the normal? if yes then it contributes to our reflections at this pixel
+		float NL = max(dot(N, L), 0.0);
+		if(NL > 0.0)
+		{
+			/*
+			Due to high and different intensties in HDRs, after prefiltering on a rough surface the convoluted map will have very white
+			bright dots as we sample directly from the main env cubemap with a wider specular lobe, a temporary solution is to increase 
+			the samples number to compensate and balace through the varying intensties range in the env HDR but will not work for all enviroments.
+			Another soln is sampling from the env map but from its mipmap levels according to surface roughness, think of this as
+			you will cover a wider range of the HDR varying densities without the need to increase the samples number on a smaller 
+			mipmap level as surface goees rougher so there will be no bright dots due to the compensation and the balance of the varying high intensities.
+			Sample from the environment's mip level based on roughness/pdf.
+			the mip level calc are not very well explained but we need this to hide the bright dots. (revisit) 
+			*/
+			float D   = NDF_GGX(N, halfway, roughness);
+			float NH = max(dot(N, halfway), 0.0);
+			float HV = max(dot(halfway, view), 0.0);
+			float pdf = D * NH / (4.0 * HV) + 0.0001; 
+			float texel  = 4.0 * PI / (6.0 * 512 * 512);
+			float sample = 1.0 / (float(SAMPLE_COUNT) * pdf + 0.0001);
+			float mip = roughness == 0.0 ? 0.0 : 0.5 * log2(sample / texel);
+
+			//think of it as the pdf of monte carlo as each sample is weighted for how much it contributes to the final color
+			prefiltered_color += textureLod(env_map, L, mip).rgb * NL;
+			weight += NL;
+		}
+	}
+	prefiltered_color = prefiltered_color / weight;
+	frag_color = vec4(prefiltered_color, 1.0);
+}

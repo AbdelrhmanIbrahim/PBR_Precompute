@@ -58,10 +58,13 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="cube.vertex">
+    <None Include="shaders\specular_prefiltering_convolution.pixel">
       <Filter>Source Files</Filter>
     </None>
-    <None Include="equarectangular_to_cubemap.pixel">
+    <None Include="shaders\equarectangular_to_cubemap.pixel">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="shaders\cube.vertex">
       <Filter>Source Files</Filter>
     </None>
   </ItemGroup>

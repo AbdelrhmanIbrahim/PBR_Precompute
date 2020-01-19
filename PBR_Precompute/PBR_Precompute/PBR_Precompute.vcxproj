@@ -36,8 +36,9 @@
     <ClInclude Include="wglew.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="cube.vertex" />
-    <None Include="equarectangular_to_cubemap.pixel" />
+    <None Include="shaders\cube.vertex" />
+    <None Include="shaders\equarectangular_to_cubemap.pixel" />
+    <None Include="shaders\specular_prefiltering_convolution.pixel" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
