@@ -448,10 +448,10 @@ int
 main(int argc, char** argv)
 {
 	if (argc < 2)
-		printf("Generates the precomputed cubemap faces for PBR. Pass two paths, the diffuse HDR and the enviroment HDR. Path their names if in the EXE Directory.");
+		printf(" Generates the precomputed cubemap faces for PBR. \n Pass two paths, the Diffuse HDR and the Enviroment HDR. \n Path their names if in the same EXE Directory. \n Note : Use cmftstudio in tools folder to generate the Irradiance (diffuse) HDR from the Enviroment HDR.");
 
-	const char* diffuse_hdr_path = "LA_diff.hdr";
-	const char* env_hdr_path = "LA_spec.hdr";
+	const char* diffuse_hdr_path = argv[1];
+	const char* env_hdr_path = argv[2];
 	
 	//create directories
 	const char* diffuse_dir = "PBR/Diffuse";
