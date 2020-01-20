@@ -38,6 +38,8 @@
   <ItemGroup>
     <None Include="shaders\cube.vertex" />
     <None Include="shaders\equarectangular_to_cubemap.pixel" />
+    <None Include="shaders\quad.vertex" />
+    <None Include="shaders\specular_BRDF_convolution.pixel" />
     <None Include="shaders\specular_prefiltering_convolution.pixel" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -109,6 +111,7 @@
     </ClCompile>
     <Link>
       <AdditionalDependencies>opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <SubSystem>Console</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">

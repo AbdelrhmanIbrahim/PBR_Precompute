@@ -22,7 +22,9 @@ HOW TO:
 	GGX importance sampling which is generating the samples biased and constrained around an orientation using both concepts above. (inside the specular lobe)
 */
 
-#version 330 core
+#version 400 core
+#extension GL_ARB_shading_language_420pack : require
+
 in vec3 world_pos;
 out vec4 frag_color;
 
@@ -72,9 +74,10 @@ GGX_Importance_Sampling(vec2 Xi, vec3 N, float roughness)
 	vec3 tangent   = normalize(cross(up, N));
 	vec3 bitangent = normalize(cross(N, tangent));
 
-	vec3 sample = tangent * H.x + bitangent * H.y + N * H.z;
-	return normalize(sample);
+	vec3 s = tangent * H.x + bitangent * H.y + N * H.z;
+	return normalize(s);
 }
+
 float
 NDF_GGX(vec3 normal, vec3 halfway, float roughness)
 {
@@ -128,8 +131,8 @@ main()
 			float HV = max(dot(halfway, view), 0.0);
 			float pdf = D * NH / (4.0 * HV) + 0.0001; 
 			float texel  = 4.0 * PI / (6.0 * 512 * 512);
-			float sample = 1.0 / (float(SAMPLE_COUNT) * pdf + 0.0001);
-			float mip = roughness == 0.0 ? 0.0 : 0.5 * log2(sample / texel);
+			float samp = 1.0 / (float(SAMPLE_COUNT) * pdf + 0.0001);
+			float mip = roughness == 0.0 ? 0.0 : 0.5 * log2(samp / texel);
 
 			//think of it as the pdf of monte carlo as each sample is weighted for how much it contributes to the final color
 			prefiltered_color += textureLod(env_map, L, mip).rgb * NL;

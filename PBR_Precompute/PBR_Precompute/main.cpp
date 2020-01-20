@@ -11,6 +11,7 @@
 #include "image.h"
 
 #include <vector>
+#include <string>
 
 using namespace math;
 using namespace glgpu;
@@ -24,6 +25,7 @@ struct win_gl
 	HGLRC context;
 };
 
+//offline window with opengl context creation
 LRESULT CALLBACK
 _fake_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
@@ -189,7 +191,8 @@ offline_win_create(int gl_major, int gl_minor)
 	return win;
 }
 
-constexpr static Vertex unit_cube[36] =
+//PBR stuff
+constexpr static Vertex cube[36] =
 {
 	//back
 	Vertex{-1.0f, -1.0f, -1.0f},
@@ -240,6 +243,17 @@ constexpr static Vertex unit_cube[36] =
 	Vertex{-1.0f, 1.0f, 1.0f}
 };
 
+constexpr static Vertex quad[6] =
+{
+	Vertex{-1.0f,  1.0f, 0.0f,  vec3f{0,0,1}, 0.0f, 1.0f},
+	Vertex{-1.0f, -1.0f, 0.0f,  vec3f{0,0,1}, 0.0f, 0.0f},
+	Vertex{ 1.0f,  1.0f, 0.0f,  vec3f{0,0,1}, 1.0f, 1.0f},
+
+	Vertex{ 1.0f,  1.0f, 0.0f,  vec3f{0,0,1}, 1.0f, 1.0f},
+	Vertex{-1.0f, -1.0f, 0.0f,  vec3f{0,0,1}, 0.0f, 0.0f},
+	Vertex{ 1.0f, -1.0f, 0.0f,  vec3f{0,0,1}, 1.0f, 0.0f}
+};
+
 std::vector<Image>
 hdr_to_cubemap(const io::Image& img, vec2f view_size, bool mipmap)
 {
@@ -283,7 +297,7 @@ hdr_to_cubemap(const io::Image& img, vec2f view_size, bool mipmap)
 	//render offline to the output cubemap texs
 	glViewport(0, 0, view_size[0], view_size[1]);
 	vao cube_vao = vao_create();
-	buffer cube_vs = vertex_buffer_create(unit_cube, 36);
+	buffer cube_vs = vertex_buffer_create(cube, 36);
 
 	std::vector<io::Image> imgs(6);
 	for (int i = 0; i < 6; ++i)
@@ -322,27 +336,11 @@ hdr_to_cubemap(const io::Image& img, vec2f view_size, bool mipmap)
 void
 hdr_faces_extract(const char* hdr_path, vec2f view_size)
 {
-	frame_start();
-	color_clear(1, 0, 0);
-
-	//draw
-	Image img = image_read(hdr_path, io::IMAGE_FORMAT::HDR);
-	auto imgs = hdr_to_cubemap(img, view_size, false);
-	image_free(img);
-
-	io::image_write(imgs[0], std::string("right.png").c_str(), io::IMAGE_FORMAT::PNG);
-	io::image_write(imgs[1], std::string("left.png").c_str(), io::IMAGE_FORMAT::PNG);
-	io::image_write(imgs[2], std::string("top.png").c_str(), io::IMAGE_FORMAT::PNG);
-	io::image_write(imgs[3], std::string("bottom.png").c_str(), io::IMAGE_FORMAT::PNG);
-	io::image_write(imgs[4], std::string("back.png").c_str(), io::IMAGE_FORMAT::PNG);
-	io::image_write(imgs[5], std::string("front.png").c_str(), io::IMAGE_FORMAT::PNG);
-
-	for (int i = 0; i < 6; ++i)
-		image_free(imgs[i]);
+	
 }
 
 std::vector<Image>
-cubemap_pp(cubemap input, cubemap output, program postprocessor, Unifrom_Float uniform, vec2f view_size, int mipmap_level)
+cubemap_pp(cubemap input, cubemap output, program postprocessor, Unifrom_Float uniform, vec2f view_size)
 {
 	//convert HDR equirectangular environment map to cubemap
 	//create 6 views that will be rendered to the cubemap using equarectangular shader
@@ -352,8 +350,8 @@ cubemap_pp(cubemap input, cubemap output, program postprocessor, Unifrom_Float u
 	{
 		view_lookat_matrix(vec3f{-0.001f,  0.0f,  0.0f}, vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f}),
 		view_lookat_matrix(vec3f{0.001f,  0.0f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f}),
-		view_lookat_matrix(vec3f{0.0f, -0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  1.0f}),
-		view_lookat_matrix(vec3f{0.0f,  0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  -1.0f}),
+		view_lookat_matrix(vec3f{0.0f, -0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  -1.0f}),
+		view_lookat_matrix(vec3f{0.0f,  0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  1.0f}),
 		view_lookat_matrix(vec3f{0.0f,  0.0f, -0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f}),
 		view_lookat_matrix(vec3f{0.0f,  0.0f,  0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f})
 	};
@@ -370,14 +368,12 @@ cubemap_pp(cubemap input, cubemap output, program postprocessor, Unifrom_Float u
 	program_use(postprocessor);
 	cubemap_bind(input, TEXTURE_UNIT::UNIT_0);
 	uniform1i_set(postprocessor, "env_map", TEXTURE_UNIT::UNIT_0);
-
-	//assign float uniforms (move to arrays)
 	uniform1f_set(postprocessor, uniform.uniform, uniform.value);
 
 	//render offline to the output cubemap texs
 	glViewport(0, 0, view_size[0], view_size[1]);
 	vao cube_vao = vao_create();
-	buffer cube_vs = vertex_buffer_create(unit_cube, 36);
+	buffer cube_vs = vertex_buffer_create(cube, 36);
 
 	std::vector<io::Image> imgs(6);
 	for (int i = 0; i < 6; ++i)
@@ -390,7 +386,7 @@ cubemap_pp(cubemap input, cubemap output, program postprocessor, Unifrom_Float u
 	
 	for (unsigned int i = 0; i < 6; ++i)
 	{
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, (GLuint)output, mipmap_level);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, (GLuint)output, 0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		uniformmat4f_set(postprocessor, "vp", proj * views[i]);
 		vao_bind(cube_vao, cube_vs, NULL);
@@ -411,53 +407,121 @@ cubemap_pp(cubemap input, cubemap output, program postprocessor, Unifrom_Float u
 	return imgs;
 }
 
+Image
+render_texture2d_offline(program prog, vec2f view_size)
+{
+
+	GLuint fbo, rbo;
+	texture output = texture2d_create(view_size, INTERNAL_TEXTURE_FORMAT::RG16F, EXTERNAL_TEXTURE_FORMAT::RG, DATA_TYPE::FLOAT, false);
+	glGenFramebuffers(1, &fbo);
+	glGenRenderbuffers(1, &rbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, view_size[0], view_size[1]);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, (GLuint)output, 0);
+
+	//setup
+	program_use(prog);
+	glViewport(0, 0, view_size[0], view_size[1]);
+
+	//render to output attached texture
+	vao quad_vao = vao_create();
+	buffer quad_vs = vertex_buffer_create(quad, 6);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	vao_bind(quad_vao, quad_vs, NULL);
+	draw_strip(6);
+	vao_unbind();
+
+	//read
+	Image result;
+	result.data = new unsigned char[4 * view_size[0] * view_size[1]];
+	result.width = view_size[0];
+	result.height = view_size[1];
+	result.channels = 4;
+	glReadPixels(0, 0, view_size[0], view_size[0], GL_RGBA, GL_UNSIGNED_BYTE, result.data);
+	glBindFramebuffer(GL_FRAMEBUFFER, NULL);
+
+	glDeleteRenderbuffers(1, &rbo);
+	glDeleteFramebuffers(1, &fbo);
+	vao_delete(quad_vao);
+	buffer_delete(quad_vs);
+	texture_free(output);
+
+	return result;
+}
+
 int
 main(int argc, char** argv)
 {
 	//if (argc < 2)
 		//printf("pass two paths, first is the diffuse map HDR image, second is the enviroment map HDR image");
 
-	//offline stuff, extract faces from hdr
 	const char* diffuse_hdr_path = "LA_diff.hdr";
 	const char* env_hdr_path = "LA_spec.hdr";
 
 	//create offline window with attached 4.5 opengl context
+	//for some reason the right read is after the second draw..double buffering? (TODO), so that's a dummy first draw
 	win_gl win = offline_win_create(4, 5);
+	color_clear(1, 0, 0);
+	frame_start();
 
-	//extract diffuse cubemap
+	//generate diffuse cubemap
 	{
-		//for some reason the right read is after the second draw..double buffering? (TODO), so that's a dummy first draw
-		//color_clear(0, 1, 0);
-		//hdr_faces_extract(diffuse_hdr_path, vec2f{ 512, 512 });
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		Image img = image_read(diffuse_hdr_path, io::IMAGE_FORMAT::HDR);
+		auto imgs = hdr_to_cubemap(img, vec2f{ 512, 512 }, false);
+		image_free(img);
+		io::image_write(imgs[0], std::string("diffuse_right.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[1], std::string("diffuse_left.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[2], std::string("diffuse_top.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[3], std::string("diffuse_bottom.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[4], std::string("diffuse_back.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[5], std::string("diffuse_front.png").c_str(), io::IMAGE_FORMAT::PNG);
+
+		for (int i = 0; i < 6; ++i)
+			image_free(imgs[i]);
 	}
 
-	//extract 5 Lod reflections cubemaps
+	//generate 5 LOD reflections cubemaps
 	{
-		vec2f prefiltered_initial_size{ 512, 512};
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		vec2f prefiltered_initial_size{512, 512};
 		io::Image env = image_read(env_hdr_path, io::IMAGE_FORMAT::HDR);
-		cubemap env_cmap = cubemap_hdr_create(env, vec2f{ 512, 512 }, true);
-		cubemap specular_prefiltered_map = cubemap_create(prefiltered_initial_size, INTERNAL_TEXTURE_FORMAT::RGB16F, EXTERNAL_TEXTURE_FORMAT::RGB, DATA_TYPE::FLOAT, true);
+		cubemap env_cmap = cubemap_hdr_create(env, prefiltered_initial_size, true);
+		cubemap specular_prefiltered_map = cubemap_create(prefiltered_initial_size, INTERNAL_TEXTURE_FORMAT::RGB16F, EXTERNAL_TEXTURE_FORMAT::RGB, DATA_TYPE::FLOAT, false);
 		program prefiltering_prog = program_create("shaders/cube.vertex", "shaders/specular_prefiltering_convolution.pixel");
+
 		unsigned int max_mipmaps = 5;
 		for (unsigned int mip_level = 0; mip_level < max_mipmaps; ++mip_level)
 		{
 			float roughness = (float)mip_level / max_mipmaps;
 			vec2f mipmap_size{ prefiltered_initial_size[0] * std::pow(0.5, mip_level) , prefiltered_initial_size[0] * std::pow(0.5, mip_level) };
-			auto imgs = cubemap_pp(env_cmap, specular_prefiltered_map, prefiltering_prog, Unifrom_Float{ "roughness", roughness }, mipmap_size, mip_level);
-
-			io::image_write(imgs[0], std::string("sright.png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[1], std::string("sleft.png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[2], std::string("stop.png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[3], std::string("sbottom.png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[4], std::string("sback.png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[5], std::string("sfront.png").c_str(), io::IMAGE_FORMAT::PNG);
+			auto imgs = cubemap_pp(env_cmap, specular_prefiltered_map, prefiltering_prog, Unifrom_Float{ "roughness", roughness }, mipmap_size);
+			auto level = std::to_string(mip_level);
+			io::image_write(imgs[0], std::string("LOD_right" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[1], std::string("LOD_left" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[2], std::string("LOD_top" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[3], std::string("LOD_bottom" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[4], std::string("LOD_back" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[5], std::string("LOD_front" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
 
 			for (int i = 0; i < 6; ++i)
 				image_free(imgs[i]);
 		}
+
 		program_delete(prefiltering_prog);
 		cubemap_free(env_cmap);
 		image_free(env);
+	}
+
+	//generate BRDF LUT Texture
+	{
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		program BRDF_prog = program_create("shaders/quad.vertex", "shaders/specular_BRDF_convolution.pixel");
+		Image img = render_texture2d_offline(BRDF_prog, vec2f{ 512, 512 });
+		program_delete(BRDF_prog);
+		io::image_write(img, "BRDF_LUT.png", io::IMAGE_FORMAT::PNG);
+		image_free(img);
 	}
 	return 0;
 }

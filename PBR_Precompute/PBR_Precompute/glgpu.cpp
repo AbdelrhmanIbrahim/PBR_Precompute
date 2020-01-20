@@ -508,7 +508,6 @@ namespace glgpu
 		if (mipmap)
 		{
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-			glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
 		}
 		else
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -592,6 +591,13 @@ namespace glgpu
 			vao_bind(cube_vao, cube_vs, NULL);
 			draw_strip(36);
 			vao_unbind();
+		}
+
+		if (mipmap)
+		{
+			glBindTexture(GL_TEXTURE_CUBE_MAP, (GLuint)cube_map);
+			glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, NULL);
 		}
 
 		texture2d_unbind();
