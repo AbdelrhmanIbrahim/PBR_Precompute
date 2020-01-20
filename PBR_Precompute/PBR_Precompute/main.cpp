@@ -333,14 +333,8 @@ hdr_to_cubemap(const io::Image& img, vec2f view_size, bool mipmap)
 	return imgs;
 }
 
-void
-hdr_faces_extract(const char* hdr_path, vec2f view_size)
-{
-	
-}
-
 std::vector<Image>
-cubemap_pp(cubemap input, cubemap output, program postprocessor, Unifrom_Float uniform, vec2f view_size)
+cubemap_postprocess(cubemap input, cubemap output, program postprocessor, Unifrom_Float uniform, vec2f view_size)
 {
 	//convert HDR equirectangular environment map to cubemap
 	//create 6 views that will be rendered to the cubemap using equarectangular shader
@@ -454,10 +448,10 @@ int
 main(int argc, char** argv)
 {
 	if (argc < 2)
-		printf("Generates the precomputed cubemap faces for PBR. Pass two paths, first is the diffuse map HDR image, second is the enviroment map HDR image.");
+		printf("Generates the precomputed cubemap faces for PBR. Pass two paths, the diffuse HDR and the enviroment HDR. Path their names if in the EXE Directory.");
 
-	const char* diffuse_hdr_path = argv[1];
-	const char* env_hdr_path = argv[2];
+	const char* diffuse_hdr_path = "LA_diff.hdr";
+	const char* env_hdr_path = "LA_spec.hdr";
 	
 	//create directories
 	const char* diffuse_dir = "PBR/Diffuse";
@@ -507,7 +501,7 @@ main(int argc, char** argv)
 		{
 			float roughness = (float)mip_level / max_mipmaps;
 			vec2f mipmap_size{ prefiltered_initial_size[0] * std::pow(0.5, mip_level) , prefiltered_initial_size[0] * std::pow(0.5, mip_level) };
-			auto imgs = cubemap_pp(env_cmap, specular_prefiltered_map, prefiltering_prog, Unifrom_Float{ "roughness", roughness }, mipmap_size);
+			auto imgs = cubemap_postprocess(env_cmap, specular_prefiltered_map, prefiltering_prog, Unifrom_Float{ "roughness", roughness }, mipmap_size);
 			auto level = std::to_string(mip_level);
 
 			std::string dir = std::string(pre_dir + "/LOD_" + level);

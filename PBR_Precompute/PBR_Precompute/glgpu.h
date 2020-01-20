@@ -154,10 +154,6 @@ namespace glgpu
 	cubemap
 	cubemap_hdr_create(const io::Image& img, math::vec2f view_size, bool mipmap);
 
-	//TODO -- ability to send array of different uniforms types table (revisit)
-	void
-	cubemap_postprocess(cubemap input, cubemap output, program postprocessor, Unifrom_Float uniform, math::vec2f view_size, int mipmap_level);
-
 	void
 	cubemap_bind(cubemap texture, TEXTURE_UNIT texture_unit);
 
