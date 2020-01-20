@@ -453,11 +453,18 @@ render_texture2d_offline(program prog, vec2f view_size)
 int
 main(int argc, char** argv)
 {
-	//if (argc < 2)
-		//printf("pass two paths, first is the diffuse map HDR image, second is the enviroment map HDR image");
+	if (argc < 2)
+		printf("Generates the precomputed cubemap faces for PBR. Pass two paths, first is the diffuse map HDR image, second is the enviroment map HDR image.");
 
-	const char* diffuse_hdr_path = "LA_diff.hdr";
-	const char* env_hdr_path = "LA_spec.hdr";
+	const char* diffuse_hdr_path = argv[1];
+	const char* env_hdr_path = argv[2];
+	
+	//create directories
+	const char* diffuse_dir = "PBR/Diffuse";
+	const char* specular_dir = "PBR/Specular";
+	CreateDirectoryA("PBR", NULL);
+	CreateDirectoryA(diffuse_dir, NULL);
+	CreateDirectoryA(specular_dir, NULL);
 
 	//create offline window with attached 4.5 opengl context
 	//for some reason the right read is after the second draw..double buffering? (TODO), so that's a dummy first draw
@@ -467,23 +474,27 @@ main(int argc, char** argv)
 
 	//generate diffuse cubemap
 	{
+		std::string dir(diffuse_dir);
+		CreateDirectoryA(dir.c_str(), NULL);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		Image img = image_read(diffuse_hdr_path, io::IMAGE_FORMAT::HDR);
 		auto imgs = hdr_to_cubemap(img, vec2f{ 512, 512 }, false);
 		image_free(img);
-		io::image_write(imgs[0], std::string("diffuse_right.png").c_str(), io::IMAGE_FORMAT::PNG);
-		io::image_write(imgs[1], std::string("diffuse_left.png").c_str(), io::IMAGE_FORMAT::PNG);
-		io::image_write(imgs[2], std::string("diffuse_top.png").c_str(), io::IMAGE_FORMAT::PNG);
-		io::image_write(imgs[3], std::string("diffuse_bottom.png").c_str(), io::IMAGE_FORMAT::PNG);
-		io::image_write(imgs[4], std::string("diffuse_back.png").c_str(), io::IMAGE_FORMAT::PNG);
-		io::image_write(imgs[5], std::string("diffuse_front.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[0], std::string(dir + "/diffuse_right.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[1], std::string(dir + "/diffuse_left.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[2], std::string(dir + "/diffuse_top.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[3], std::string(dir + "/diffuse_bottom.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[4], std::string(dir + "/diffuse_back.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[5], std::string(dir + "/diffuse_front.png").c_str(), io::IMAGE_FORMAT::PNG);
 
 		for (int i = 0; i < 6; ++i)
 			image_free(imgs[i]);
 	}
-
+	
 	//generate 5 LOD reflections cubemaps
 	{
+		std::string pre_dir(std::string(specular_dir) + "/Prefiltering");
+		CreateDirectoryA(pre_dir.c_str(), NULL);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		vec2f prefiltered_initial_size{512, 512};
 		io::Image env = image_read(env_hdr_path, io::IMAGE_FORMAT::HDR);
@@ -498,12 +509,15 @@ main(int argc, char** argv)
 			vec2f mipmap_size{ prefiltered_initial_size[0] * std::pow(0.5, mip_level) , prefiltered_initial_size[0] * std::pow(0.5, mip_level) };
 			auto imgs = cubemap_pp(env_cmap, specular_prefiltered_map, prefiltering_prog, Unifrom_Float{ "roughness", roughness }, mipmap_size);
 			auto level = std::to_string(mip_level);
-			io::image_write(imgs[0], std::string("LOD_right" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[1], std::string("LOD_left" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[2], std::string("LOD_top" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[3], std::string("LOD_bottom" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[4], std::string("LOD_back" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[5], std::string("LOD_front" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+
+			std::string dir = std::string(pre_dir + "/LOD_" + level);
+			CreateDirectoryA(dir.c_str(), NULL);
+			io::image_write(imgs[0], std::string(dir + "/right_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[1], std::string(dir + "/left_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[2], std::string(dir + "/top_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[3], std::string(dir + "/bottom_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[4], std::string(dir + "/back_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[5], std::string(dir + "/front_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
 
 			for (int i = 0; i < 6; ++i)
 				image_free(imgs[i]);
@@ -516,11 +530,13 @@ main(int argc, char** argv)
 
 	//generate BRDF LUT Texture
 	{
+		std::string dir(std::string(specular_dir) + "/BRDF_LUT");
+		CreateDirectoryA(dir.c_str(), NULL);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		program BRDF_prog = program_create("shaders/quad.vertex", "shaders/specular_BRDF_convolution.pixel");
 		Image img = render_texture2d_offline(BRDF_prog, vec2f{ 512, 512 });
 		program_delete(BRDF_prog);
-		io::image_write(img, "BRDF_LUT.png", io::IMAGE_FORMAT::PNG);
+		io::image_write(img, std::string(dir + "/BRDF_LUT.png").c_str(), io::IMAGE_FORMAT::PNG);
 		image_free(img);
 	}
 	return 0;
