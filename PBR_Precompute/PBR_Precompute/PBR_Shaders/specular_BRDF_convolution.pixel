@@ -1,0 +1,142 @@
+/*
+USAGE:
+	This shader is used to generate the convoluted BRDF LUT which is the solution of the second part of the
+	specular integral equation in the reflectance equation. Which is what we use in the PBR shader to sample a part from the specular part of the rendering eqn integral.
+
+HOW TO:
+	Exactly like the specular_prefiltering_convolution pixel shader (read its HOW TO first) but instead of sampling directly with the
+	generated from the importance sampling we proces it through the Geometry and Fresnel of the BRDF, check the second part of the specular
+	integral after simplifying. The generated sample this time depends not on Van Der Corpus sequence but instead on the texture coordinates
+	where X is the cos_thata where theta is the angle between the view and the normal and Y is the surface roughness.
+
+	Read till page 7 before you dig in : https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
+	must say that some approx made by EPIC Games are not well explained tho even in the link. (G_Vis)
+	read specular_prefiltering_convolution shader first for a clear understanding when reading this.
+*/
+
+#version 330 core
+in vec2 uvs;
+out vec2 frag_color;
+
+const float PI = 3.14159265359;
+
+//Van Der Corpus sequence to mirror a decimal binary representation around its decimal point.
+//read this to understand : http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
+float
+VDC(uint bits) 
+{
+	bits = (bits << 16u) | (bits >> 16u);
+	bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+	bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+	bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+	bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+	return float(bits) * 2.3283064365386963e-10; //0x100000000
+}
+
+// Low-discrepancy sequence to generate low-discrepancy sample i of the total sample set of size N.
+vec2
+Hammersley(uint i, uint N)
+{
+	return vec2(float(i)/float(N), VDC(i));
+}
+
+vec3
+GGX_Importance_Sampling(vec2 Xi, vec3 N, float roughness)
+{
+	//calc userd to generate a sample vector that somehow oriented around the microfaces halfway vector and constrained inside the specular lobe
+	float a = roughness*roughness;
+	float phi = 2.0 * PI * Xi.x;
+	float cos_theta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
+	float sin_theta = sqrt(1.0 - cos_theta*cos_theta);
+
+	// from spherical coordinates to cartesian coordinates
+	vec3 H;
+	H.x = cos(phi) * sin_theta;
+	H.y = sin(phi) * sin_theta;
+	H.z = cos_theta;
+
+	// from tangent-space vector to world-space sample vector
+	vec3 up        = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+	vec3 tangent   = normalize(cross(up, N));
+	vec3 bitangent = normalize(cross(N, tangent));
+
+	vec3 sample = tangent * H.x + bitangent * H.y + N * H.z;
+	return normalize(sample);
+}
+
+/*
+Geometry Function used to approximate microfaces geomtery and their interactions with light dir and view dir
+geometry shadowing with light dir through the microfaces + geometry obstruction with view dir which is blocking the reflected light dir from viewer
+contributes in the shadowing through the surface, we use Smith's method
+*/
+
+float
+_GGX_IBL(float roughness)
+{
+	return (roughness * roughness) / 2;
+}
+
+float
+_Geomtery_Schlick_GGX(float dot, float k)
+{
+	float nom   = dot;
+	float denom = dot * (1.0 - k) + k;
+	return nom / denom;
+}
+
+float
+Geometry_Smith(vec3 normal, vec3 view_dir, vec3 light_dir, float roughness, float k)
+{
+	float nv = max(dot(normal, view_dir), 0.0);
+	float nl = max(dot(normal, light_dir), 0.0);
+	float ggx1 = _Geomtery_Schlick_GGX(nv, k);
+	float ggx2 = _Geomtery_Schlick_GGX(nl, k);
+	return ggx1 * ggx2;
+}
+
+//Here we solve the BRDF specular integration given different view - normal angle and roughness
+vec2
+BRDF_Integration_Soln(float NV, float roughness)
+{
+	//our quad normal is Z, assuming view is on XZ plane
+	vec3 N = vec3(0.0, 0.0, 1.0);
+	vec3 view;
+	view.x = sqrt(1.0 - NV*NV); //sin theta
+	view.y = 0.0;
+	view.z = NV; //cos theta
+	
+	float BRDF_integral_1 = 0.0;
+	float BRDF_integral_2 = 0.0;
+
+	const uint SAMPLE_COUNT = 1024u;
+	for(uint i = 0u; i < SAMPLE_COUNT; ++i)	
+	{
+		vec2 Xi = Hammersley(i, SAMPLE_COUNT);
+		vec3 halfway  = GGX_Importance_Sampling(Xi, N, roughness);
+		vec3 L  = normalize(2.0 * dot(view, halfway) * halfway - view);
+
+		float NL = max(L.z, 0.0); //instead of dot product as we do know that the quad normal is +Z
+		if(NL > 0.0)
+		{
+			float NH = max(halfway.z, 0.0); //instead of dot product as we do know that the quad normal is +Z
+			float VH = max(dot(view, halfway), 0.0);
+			float G = Geometry_Smith(N, view, L, roughness, _GGX_IBL(roughness));
+			float G_Vis = (G * VH) / (NH * NV);
+			float Fc = pow(1.0 - VH, 5.0);
+			BRDF_integral_1 += (1.0 - Fc) * G_Vis; //the first part of BRDF integration (apparently G_Vis is the approx of the other terms in the integral)
+			BRDF_integral_2 += Fc * G_Vis; //the second part
+			//both part represents a scaling and kind of biasing to F0 which is the surface base reflectivity,
+			//rougher surfaces got blurrier reflectivity for example.
+		}
+	}
+	BRDF_integral_1 /= float(SAMPLE_COUNT);
+	BRDF_integral_2 /= float(SAMPLE_COUNT);
+	return vec2(BRDF_integral_1, BRDF_integral_2);
+}
+
+void
+main() 
+{
+	//the quad will be like a 2D RG texture
+	frag_color = BRDF_Integration_Soln(uvs.x, uvs.y);
+}

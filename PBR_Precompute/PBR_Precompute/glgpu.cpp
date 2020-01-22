@@ -574,7 +574,7 @@ namespace glgpu
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
 
 		//setup
-		program prog = program_create("shaders/cube.vertex", "shaders/equarectangular_to_cubemap.pixel");
+		program prog = program_create("PBR_Shaders/cube.vertex", "PBR_Shaders/equarectangular_to_cubemap.pixel");
 		program_use(prog);
 		texture2d_bind(hdr, TEXTURE_UNIT::UNIT_0);
 

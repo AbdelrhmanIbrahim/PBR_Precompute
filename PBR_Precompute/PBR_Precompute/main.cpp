@@ -267,12 +267,12 @@ hdr_to_cubemap(const io::Image& img, vec2f view_size, bool mipmap)
 	Mat4f proj = proj_prespective_matrix(100, 0.1, 1, -1, 1, -1, 1.00000004321);
 	Mat4f views[6] =
 	{
-		view_lookat_matrix(vec3f{-0.001f,  0.0f,  0.0f}, vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f}),
-		view_lookat_matrix(vec3f{0.001f,  0.0f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f}),
+		view_lookat_matrix(vec3f{-0.001f,  0.0f,  0.0f}, vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f}),
+		view_lookat_matrix(vec3f{0.001f,  0.0f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f}),
 		view_lookat_matrix(vec3f{0.0f, -0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  1.0f}),
-		view_lookat_matrix(vec3f{0.0f,  0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  -1.0f}),
-		view_lookat_matrix(vec3f{0.0f,  0.0f, -0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f}),
-		view_lookat_matrix(vec3f{0.0f,  0.0f,  0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f})
+		view_lookat_matrix(vec3f{0.0f,  0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  1.0f}),
+		view_lookat_matrix(vec3f{0.0f,  0.0f, -0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f}),
+		view_lookat_matrix(vec3f{0.0f,  0.0f,  0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f})
 	};
 
 	//create env cubemap
@@ -281,16 +281,12 @@ hdr_to_cubemap(const io::Image& img, vec2f view_size, bool mipmap)
 	cubemap cube_map = cubemap_create(view_size, INTERNAL_TEXTURE_FORMAT::RGB16F, EXTERNAL_TEXTURE_FORMAT::RGB, DATA_TYPE::FLOAT, mipmap);
 
 	//float framebuffer to render to
-	GLuint fbo, rbo;
+	GLuint fbo;
 	glGenFramebuffers(1, &fbo);
-	glGenRenderbuffers(1, &rbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, view_size[0], view_size[1]);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
 
 	//setup
-	program prog = program_create("shaders/cube.vertex", "shaders/equarectangular_to_cubemap.pixel");
+	program prog = program_create("PBR_Shaders/cube.vertex", "PBR_Shaders/equarectangular_to_cubemap.pixel");
 	program_use(prog);
 	texture2d_bind(hdr, TEXTURE_UNIT::UNIT_0);
 
@@ -323,7 +319,6 @@ hdr_to_cubemap(const io::Image& img, vec2f view_size, bool mipmap)
 	glBindFramebuffer(GL_FRAMEBUFFER, NULL);
 
 	//free
-	glDeleteRenderbuffers(1, &rbo);
 	glDeleteFramebuffers(1, &fbo);
 	vao_delete(cube_vao);
 	buffer_delete(cube_vs);
@@ -342,21 +337,17 @@ cubemap_postprocess(cubemap input, cubemap output, program postprocessor, Unifro
 	Mat4f proj = proj_prespective_matrix(100, 0.1, 1, -1, 1, -1, 1.00000004321);
 	Mat4f views[6] =
 	{
-		view_lookat_matrix(vec3f{-0.001f,  0.0f,  0.0f}, vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f}),
-		view_lookat_matrix(vec3f{0.001f,  0.0f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f}),
-		view_lookat_matrix(vec3f{0.0f, -0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  -1.0f}),
-		view_lookat_matrix(vec3f{0.0f,  0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f,  0.0f,  1.0f}),
-		view_lookat_matrix(vec3f{0.0f,  0.0f, -0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f}),
-		view_lookat_matrix(vec3f{0.0f,  0.0f,  0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, -1.0f,  0.0f})
+		view_lookat_matrix(vec3f{-0.001f,  0.0f,  0.0f}, vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f}),
+		view_lookat_matrix(vec3f{0.001f,  0.0f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f}),
+		view_lookat_matrix(vec3f{0.0f, -0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 0.0f,  1.0f}),
+		view_lookat_matrix(vec3f{0.0f,  0.001f,  0.0f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 0.0f,  1.0f}),
+		view_lookat_matrix(vec3f{0.0f,  0.0f, -0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f}),
+		view_lookat_matrix(vec3f{0.0f,  0.0f,  0.001f},  vec3f{0.0f, 0.0f, 0.0f}, vec3f{0.0f, 1.0f,  0.0f})
 	};
 
-	GLuint fbo, rbo;
+	GLuint fbo;
 	glGenFramebuffers(1, &fbo);
-	glGenRenderbuffers(1, &rbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, view_size[0], view_size[1]);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
 
 	//convolute
 	program_use(postprocessor);
@@ -393,7 +384,6 @@ cubemap_postprocess(cubemap input, cubemap output, program postprocessor, Unifro
 	glBindFramebuffer(GL_FRAMEBUFFER, NULL);
 
 	//free
-	glDeleteRenderbuffers(1, &rbo);
 	glDeleteFramebuffers(1, &fbo);
 	vao_delete(cube_vao);
 	buffer_delete(cube_vs);
@@ -404,14 +394,10 @@ cubemap_postprocess(cubemap input, cubemap output, program postprocessor, Unifro
 Image
 render_texture2d_offline(program prog, vec2f view_size)
 {
-
-	GLuint fbo, rbo;
+	GLuint fbo;
 	texture output = texture2d_create(view_size, INTERNAL_TEXTURE_FORMAT::RG16F, EXTERNAL_TEXTURE_FORMAT::RG, DATA_TYPE::FLOAT, false);
 	glGenFramebuffers(1, &fbo);
-	glGenRenderbuffers(1, &rbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, view_size[0], view_size[1]);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, (GLuint)output, 0);
 
 	//setup
@@ -435,7 +421,6 @@ render_texture2d_offline(program prog, vec2f view_size)
 	glReadPixels(0, 0, view_size[0], view_size[0], GL_RGBA, GL_UNSIGNED_BYTE, result.data);
 	glBindFramebuffer(GL_FRAMEBUFFER, NULL);
 
-	glDeleteRenderbuffers(1, &rbo);
 	glDeleteFramebuffers(1, &fbo);
 	vao_delete(quad_vao);
 	buffer_delete(quad_vs);
@@ -474,12 +459,12 @@ main(int argc, char** argv)
 		Image img = image_read(diffuse_hdr_path, io::IMAGE_FORMAT::HDR);
 		auto imgs = hdr_to_cubemap(img, vec2f{ 512, 512 }, false);
 		image_free(img);
-		io::image_write(imgs[0], std::string(dir + "/diffuse_right.png").c_str(), io::IMAGE_FORMAT::PNG);
-		io::image_write(imgs[1], std::string(dir + "/diffuse_left.png").c_str(), io::IMAGE_FORMAT::PNG);
-		io::image_write(imgs[2], std::string(dir + "/diffuse_top.png").c_str(), io::IMAGE_FORMAT::PNG);
-		io::image_write(imgs[3], std::string(dir + "/diffuse_bottom.png").c_str(), io::IMAGE_FORMAT::PNG);
-		io::image_write(imgs[4], std::string(dir + "/diffuse_back.png").c_str(), io::IMAGE_FORMAT::PNG);
-		io::image_write(imgs[5], std::string(dir + "/diffuse_front.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[0], std::string(dir + "/left.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[1], std::string(dir + "/right.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[2], std::string(dir + "/top.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[3], std::string(dir + "/bottom.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[4], std::string(dir + "/back.png").c_str(), io::IMAGE_FORMAT::PNG);
+		io::image_write(imgs[5], std::string(dir + "/front.png").c_str(), io::IMAGE_FORMAT::PNG);
 
 		for (int i = 0; i < 6; ++i)
 			image_free(imgs[i]);
@@ -494,7 +479,7 @@ main(int argc, char** argv)
 		io::Image env = image_read(env_hdr_path, io::IMAGE_FORMAT::HDR);
 		cubemap env_cmap = cubemap_hdr_create(env, prefiltered_initial_size, true);
 		cubemap specular_prefiltered_map = cubemap_create(prefiltered_initial_size, INTERNAL_TEXTURE_FORMAT::RGB16F, EXTERNAL_TEXTURE_FORMAT::RGB, DATA_TYPE::FLOAT, false);
-		program prefiltering_prog = program_create("shaders/cube.vertex", "shaders/specular_prefiltering_convolution.pixel");
+		program prefiltering_prog = program_create("PBR_Shaders/cube.vertex", "PBR_Shaders/specular_prefiltering_convolution.pixel");
 
 		unsigned int max_mipmaps = 5;
 		for (unsigned int mip_level = 0; mip_level < max_mipmaps; ++mip_level)
@@ -506,12 +491,12 @@ main(int argc, char** argv)
 
 			std::string dir = std::string(pre_dir + "/LOD_" + level);
 			CreateDirectoryA(dir.c_str(), NULL);
-			io::image_write(imgs[0], std::string(dir + "/right_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[1], std::string(dir + "/left_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[2], std::string(dir + "/top_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[3], std::string(dir + "/bottom_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[4], std::string(dir + "/back_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
-			io::image_write(imgs[5], std::string(dir + "/front_" + level + ".png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[0], std::string(dir + "/left.png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[1], std::string(dir + "/right.png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[2], std::string(dir + "/top.png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[3], std::string(dir + "/bottom.png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[4], std::string(dir + "/back.png").c_str(), io::IMAGE_FORMAT::PNG);
+			io::image_write(imgs[5], std::string(dir + "/front.png").c_str(), io::IMAGE_FORMAT::PNG);
 
 			for (int i = 0; i < 6; ++i)
 				image_free(imgs[i]);
@@ -527,7 +512,7 @@ main(int argc, char** argv)
 		std::string dir(std::string(specular_dir) + "/BRDF_LUT");
 		CreateDirectoryA(dir.c_str(), NULL);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		program BRDF_prog = program_create("shaders/quad.vertex", "shaders/specular_BRDF_convolution.pixel");
+		program BRDF_prog = program_create("PBR_Shaders/quad.vertex", "PBR_Shaders/specular_BRDF_convolution.pixel");
 		Image img = render_texture2d_offline(BRDF_prog, vec2f{ 512, 512 });
 		program_delete(BRDF_prog);
 		io::image_write(img, std::string(dir + "/BRDF_LUT.png").c_str(), io::IMAGE_FORMAT::PNG);
