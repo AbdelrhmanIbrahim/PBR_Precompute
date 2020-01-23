@@ -31,9 +31,8 @@ namespace io
 	}
 
 	void
-		image_write(const Image& img, const char* path, IMAGE_FORMAT format)
+	image_write(const Image& img, const char* path, IMAGE_FORMAT format)
 	{
-		stbi_flip_vertically_on_write(true);
 		switch (format)
 		{
 		case IMAGE_FORMAT::BMP:
